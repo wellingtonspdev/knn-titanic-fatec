@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+*.py[cod]
+.ipynb_checkpoints/
+.pytest_cache/
+.coverage
+htmlcov/
+.mplconfig/
+.jupyter-temp/
+
+# Dados locais fornecidos pelo Kaggle; manter apenas o marcador da pasta.
+data/train.csv
