@@ -9,4 +9,4 @@ htmlcov/
 .jupyter-temp/
 
 # Dados locais fornecidos pelo Kaggle; manter apenas o marcador da pasta.
-data/train.csv
+data/*.csv

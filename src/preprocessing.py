@@ -23,6 +23,8 @@ REQUIRED_COLUMNS = {
     "Embarked",
 }
 
+REQUIRED_FEATURE_COLUMNS = REQUIRED_COLUMNS.difference({"Survived"})
+
 MODEL_SOURCE_COLUMNS = ["Pclass", "Sex", "Age", "SibSp", "Parch", "Fare", "Embarked"]
 PCLASS_CATEGORIES = [1, 2, 3]
 EMBARKED_CATEGORIES = ["C", "Q", "S"]
@@ -34,6 +36,7 @@ class PreprocessingParameters:
 
     age_median: float
     embarked_mode: str
+    fare_median: float
 
 
 @dataclass(frozen=True)
@@ -44,9 +47,10 @@ class MinMaxParameters:
     maximum: pd.Series
 
 
-def validate_titanic_dataset(data: pd.DataFrame) -> None:
-    """Confirma que o CSV é o arquivo train.csv esperado pela atividade."""
-    missing = sorted(REQUIRED_COLUMNS.difference(data.columns))
+def validate_titanic_dataset(data: pd.DataFrame, *, require_target: bool = True) -> None:
+    """Confirma o schema do train.csv ou do test.csv oficial do Titanic."""
+    required = REQUIRED_COLUMNS if require_target else REQUIRED_FEATURE_COLUMNS
+    missing = sorted(required.difference(data.columns))
     if missing:
         raise ValueError(f"CSV incompatível: colunas obrigatórias ausentes: {missing}")
 
@@ -58,7 +62,14 @@ def fit_preprocessor(train_data: pd.DataFrame) -> PreprocessingParameters:
     embarked_mode = train_data["Embarked"].mode(dropna=True)
     if pd.isna(age_median) or embarked_mode.empty:
         raise ValueError("Não foi possível calcular mediana de Age ou moda de Embarked no treino.")
-    return PreprocessingParameters(age_median=float(age_median), embarked_mode=str(embarked_mode.iloc[0]))
+    fare_median = train_data["Fare"].median()
+    if pd.isna(fare_median):
+        raise ValueError("Não foi possível calcular a mediana de Fare no treino.")
+    return PreprocessingParameters(
+        age_median=float(age_median),
+        embarked_mode=str(embarked_mode.iloc[0]),
+        fare_median=float(fare_median),
+    )
 
 
 def add_family_size(data: pd.DataFrame) -> pd.DataFrame:
@@ -79,10 +90,13 @@ def transform_features(
     PassengerId, Name, Ticket e Cabin não entram: não oferecem distância
     matemática significativa neste experimento introdutório.
     """
-    validate_titanic_dataset(data)
+    # O test.csv externo não contém Survived, mas usa as mesmas features.
+    validate_titanic_dataset(data, require_target=False)
     result = data.loc[:, MODEL_SOURCE_COLUMNS].copy()
     result["Age"] = result["Age"].fillna(parameters.age_median)
     result["Embarked"] = result["Embarked"].fillna(parameters.embarked_mode)
+    # O train.csv oficial não possui Fare nulo; o test.csv externo possui um caso.
+    result["Fare"] = result["Fare"].fillna(parameters.fare_median)
 
     selected_nulls = result.isna().sum()
     unresolved = selected_nulls[selected_nulls > 0]

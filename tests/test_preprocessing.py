@@ -44,6 +44,7 @@ def test_transformed_features_have_no_nan_and_are_numeric() -> None:
     assert not features.isna().any().any()
     assert all(pd.api.types.is_numeric_dtype(dtype) for dtype in features.dtypes)
     assert features.index.tolist() == [10, 20, 30, 40]
+    assert "Survived" not in features.columns
     assert {"Pclass_1", "Pclass_2", "Pclass_3", "Embarked_Q", "Embarked_S"}.issubset(features.columns)
 
 
@@ -73,3 +74,28 @@ def test_required_columns_are_checked() -> None:
 def test_expected_categories_are_documented() -> None:
     assert PCLASS_CATEGORIES == [1, 2, 3]
     assert EMBARKED_CATEGORIES == ["C", "Q", "S"]
+
+
+def test_external_test_data_uses_training_parameters_without_target() -> None:
+    train = titanic_frame()
+    external = train.drop(columns=["Survived"]).copy()
+    external.loc[0, ["Age", "Fare", "Embarked"]] = [None, None, None]
+    parameters = fit_preprocessor(train)
+    features = transform_features(external, parameters)
+    assert not features.isna().any().any()
+    assert "Survived" not in features.columns
+    assert features.loc[0, "Age"] == parameters.age_median
+    assert features.loc[0, "Fare"] == parameters.fare_median
+
+
+def test_imputation_statistics_come_only_from_training_data() -> None:
+    train = titanic_frame()
+    validation = train.copy()
+    validation["Age"] = pd.Series([1000.0, float("nan"), 2000.0, 3000.0], dtype=float)
+    validation.loc[:, "Embarked"] = ["Q", None, "Q", "Q"]
+    parameters = fit_preprocessor(train)
+    transformed = transform_features(validation, parameters)
+    assert parameters.age_median == 30.0
+    assert parameters.embarked_mode == "C"
+    assert transformed.loc[1, "Age"] == 30.0
+    assert transformed.loc[1, "Embarked_Q"] == 0.0
